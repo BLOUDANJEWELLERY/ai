@@ -3,204 +3,167 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gold Purity Estimator - Enhanced</title>
+    <title>Gold 3D Estimator</title>
     <style>
         body { font-family: Arial, sans-serif; }
-        .container { text-align: center; }
+        .container { text-align: center; margin-top: 20px; }
         video { max-width: 100%; margin-top: 20px; }
-        button { padding: 10px 20px; font-size: 16px; margin-top: 10px; }
         canvas { display: none; }
-        #result { margin-top: 20px; font-size: 18px; }
-        #instructions { font-size: 16px; color: #333; margin-top: 20px; }
-        #progress-bar { margin-top: 20px; }
-        #resultCanvas { margin-top: 20px; }
+        #3d-canvas { width: 100%; height: 400px; margin-top: 20px; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Gold Purity Estimator</h1>
-        <p id="instructions">Place the gold object on a table with a coin next to it. Record each side of the object in a sequence.</p>
-        
+        <h1>Gold Purity Estimator - 3D Model</h1>
         <video id="video" width="600" height="400" autoplay></video>
         <br>
         <button id="startCapture">Start Capture</button>
         <br><br>
         <button id="processFrames" disabled>Process Frames</button>
         <br><br>
-        <div id="progress-bar">
-            <progress id="captureProgress" value="0" max="100"></progress>
-        </div>
-        <br>
-        <canvas id="canvas"></canvas>
-        <br>
-        <canvas id="resultCanvas"></canvas>
-        <div id="result"></div>
+        <div id="3d-canvas"></div>
     </div>
 
+    <!-- Include OpenCV.js and Three.js -->
     <script src="https://docs.opencv.org/4.x/opencv.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
     <script>
         let video = document.getElementById("video");
         let startCapture = document.getElementById("startCapture");
         let processFrames = document.getElementById("processFrames");
-        let result = document.getElementById("result");
-        let instructions = document.getElementById("instructions");
-        let canvas = document.getElementById("canvas");
-        let resultCanvas = document.getElementById("resultCanvas");
-        let captureProgress = document.getElementById("captureProgress");
         let frames = [];
+        let captureProgress = document.getElementById("captureProgress");
+        
+        // Initialize the 3D scene with Three.js
+        let scene, camera, renderer, mesh;
 
-        // Function to select the back camera (rear camera)
+        function init3DScene() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / 400, 0.1, 1000);
+            renderer = new THREE.WebGLRenderer();
+            renderer.setSize(window.innerWidth, 400);
+            document.getElementById("3d-canvas").appendChild(renderer.domElement);
+
+            let geometry = new THREE.BoxGeometry(1, 1, 1);
+            let material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+            mesh = new THREE.Mesh(geometry, material);
+            scene.add(mesh);
+            
+            camera.position.z = 5;
+
+            let animate = function () {
+                requestAnimationFrame(animate);
+                mesh.rotation.x += 0.01;
+                mesh.rotation.y += 0.01;
+                renderer.render(scene, camera);
+            };
+            animate();
+        }
+
+        // Start webcam and capture frames
         function startWebcam() {
-            navigator.mediaDevices.enumerateDevices()
-                .then(function(devices) {
-                    let videoDevices = devices.filter(function(device) {
-                        return device.kind === 'videoinput';
-                    });
-
-                    // Look for the back camera (facingMode: "environment")
-                    let backCamera = videoDevices.find(function(device) {
-                        return device.label.toLowerCase().includes('back') || device.facing === 'environment';
-                    });
-
-                    if (backCamera) {
-                        // Use the back camera
-                        return navigator.mediaDevices.getUserMedia({
-                            video: {
-                                deviceId: backCamera.deviceId
-                            }
-                        });
-                    } else {
-                        // If no back camera is found, fall back to front camera
-                        return navigator.mediaDevices.getUserMedia({
-                            video: true
-                        });
-                    }
-                })
+            navigator.mediaDevices.getUserMedia({ video: true })
                 .then(function(stream) {
                     video.srcObject = stream;
+                    startCapture.disabled = true;
+                    processFrames.disabled = false;
                 })
                 .catch(function(err) {
                     alert("Error accessing webcam: " + err);
                 });
         }
 
-        // Capture frames from the video
+        // Capture frames from video
         function captureFrame() {
-            let context = canvas.getContext("2d");
+            let canvas = document.createElement('canvas');
+            let context = canvas.getContext('2d');
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
             context.drawImage(video, 0, 0, canvas.width, canvas.height);
             frames.push(canvas);
-            captureProgress.value = (frames.length / 6) * 100; // Assuming 6 sides to capture
         }
 
-        // Process frames with OpenCV.js for object detection and 3D modeling
+        // Process frames to create 3D model (simplified version)
         function processCapturedFrames() {
-            let allContours = [];
+            // Placeholder for object detection and 3D reconstruction
+            let finalPointCloud = [];
+
             frames.forEach(frame => {
                 let src = cv.imread(frame);
                 let dst = new cv.Mat();
-                
-                // Convert to grayscale
-                cv.cvtColor(src, dst, cv.COLOR_RGBA2GRAY, 0);
 
-                // Smooth the image to reduce noise
-                cv.GaussianBlur(dst, dst, new cv.Size(5, 5), 0);
+                // Convert to grayscale for easier processing
+                cv.cvtColor(src, dst, cv.COLOR_RGBA2GRAY);
 
-                // Apply Canny edge detection
+                // Apply edge detection (Canny)
                 cv.Canny(dst, dst, 100, 200);
 
-                // Find contours
+                // Find contours (basic object detection)
                 let contours = new cv.MatVector();
                 let hierarchy = new cv.Mat();
                 cv.findContours(dst, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
 
-                // Approximate contours to shapes (rectangles, ellipses, etc.)
-                let approxContours = [];
-                for (let i = 0; i < contours.size(); i++) {
-                    let contour = contours.get(i);
-                    let approx = new cv.Mat();
-                    cv.approxPolyDP(contour, approx, 3, true);
-                    approxContours.push(approx);
-                }
-
-                // Store the contours for further processing
-                allContours.push(approxContours);
-            });
-
-            // Combine contours from all frames to approximate 3D shape
-            let finalContours = combineContours(allContours);
-
-            // Draw the contours for visualization
-            let contourImage = new cv.Mat();
-            cv.drawContours(contourImage, finalContours, -1, new cv.Scalar(255, 0, 0), 2);
-            cv.imshow('resultCanvas', contourImage);
-
-            // 3D Modeling (simplified approximation)
-            let model3D = create3DModelFromContours(finalContours);
-            display3DModel(model3D);
-
-            // Volume and purity calculation
-            let volume = calculateVolumeFromContours(finalContours);
-            let weight = prompt("Enter the dry weight of the object in grams:");
-            let density = 19.3;  // Density of pure gold (g/cm³)
-            let purity = (weight / volume) / density * 1000;
-
-            result.innerHTML = `Estimated Purity: ${purity.toFixed(2)}%`;
-        }
-
-        // Combine contours from multiple frames
-        function combineContours(contourGroups) {
-            let combinedContours = new cv.MatVector();
-            contourGroups.forEach(contours => {
+                // Simple feature extraction (just for demo)
                 contours.forEach(contour => {
-                    combinedContours.push_back(contour);
+                    finalPointCloud.push({ x: contour.data32S[0], y: contour.data32S[1], z: contour.data32S[2] });
                 });
+
+                // Assuming we have the point cloud, we would now create a 3D model
+                // (this part would typically involve more advanced techniques)
+                create3DModel(finalPointCloud);
             });
-            return combinedContours;
+
+            // Optionally display the 3D model once processing is complete
+            render3DModel(finalPointCloud);
         }
 
-        // Simple 3D model creation based on contours (for visualization)
-        function create3DModelFromContours(contours) {
-            // Placeholder for 3D modeling (advanced algorithms would be here)
-            return contours;
+        // Create 3D model from the point cloud
+        function create3DModel(pointCloud) {
+            // This is a placeholder for creating a 3D model
+            // Use Three.js or other methods to create a mesh from the point cloud
+            let geometry = new THREE.BufferGeometry();
+            let vertices = [];
+
+            pointCloud.forEach(point => {
+                vertices.push(point.x, point.y, point.z);
+            });
+
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+            let material = new THREE.PointsMaterial({ color: 0x888888, size: 0.1 });
+            let points = new THREE.Points(geometry, material);
+
+            scene.add(points);
+            camera.position.z = 5;
         }
 
-        // Display a 3D model (simplified for demonstration)
-        function display3DModel(model3D) {
-            // Placeholder for actual 3D rendering code (could use Three.js or similar libraries)
-            resultCanvas.width = 600;
-            resultCanvas.height = 400;
-            let ctx = resultCanvas.getContext('2d');
-            ctx.clearRect(0, 0, resultCanvas.width, resultCanvas.height);
-            ctx.fillText("3D Model Placeholder", 10, 50);
+        // Render 3D model using Three.js
+        function render3DModel(pointCloud) {
+            // Placeholder rendering process for visualizing the 3D model
+            let geometry = new THREE.Geometry();
+            pointCloud.forEach(point => {
+                geometry.vertices.push(new THREE.Vector3(point.x, point.y, point.z));
+            });
+            let material = new THREE.PointsMaterial({ color: 0xff0000, size: 0.05 });
+            let points = new THREE.Points(geometry, material);
+            scene.add(points);
+
+            let animate = function () {
+                requestAnimationFrame(animate);
+                renderer.render(scene, camera);
+            };
+            animate();
         }
 
-        // Calculate volume from contours (simplified)
-        function calculateVolumeFromContours(contours) {
-            let totalArea = 0;
-            for (let i = 0; i < contours.size(); i++) {
-                totalArea += cv.contourArea(contours.get(i));
-            }
-            let thickness = 1; // Assumed thickness (could be further estimated)
-            return totalArea * thickness / 1000; // Volume in cm³
-        }
-
-        // Event listeners
-        startCapture.addEventListener("click", function () {
-            startWebcam();
-            startCapture.disabled = true;
-            processFrames.disabled = false;
-            setTimeout(function () {
-                captureFrame();
-                processFrames.disabled = false;
-            }, 2000);
-        });
-
+        // Event Listeners
+        startCapture.addEventListener("click", startWebcam);
         processFrames.addEventListener("click", function () {
             captureFrame();
             processCapturedFrames();
         });
+
+        // Initialize the 3D scene
+        init3DScene();
     </script>
 </body>
 </html>
