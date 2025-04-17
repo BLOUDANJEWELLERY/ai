@@ -3,18 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gold Purity Estimator</title>
+    <title>Gold Purity Estimator - Enhanced</title>
     <style>
         body { font-family: Arial, sans-serif; }
         .container { text-align: center; }
         video { max-width: 100%; margin-top: 20px; }
         button { padding: 10px 20px; font-size: 16px; margin-top: 10px; }
+        canvas { display: none; }
+        #result { margin-top: 20px; font-size: 18px; }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>Gold Purity Estimator</h1>
-        <p>Place the gold object with the coin beside it. Record each side of the object individually.</p>
+        <p>Place the gold object with the coin beside it. Record each side of the object one by one.</p>
         
         <video id="video" width="600" height="400" autoplay></video>
         <br>
@@ -22,6 +24,7 @@
         <br><br>
         <button id="processFrames" disabled>Process Frames</button>
         <div id="result"></div>
+        <canvas id="canvas"></canvas>
     </div>
 
     <script src="https://docs.opencv.org/4.x/opencv.js"></script>
@@ -30,8 +33,9 @@
         let startCapture = document.getElementById("startCapture");
         let processFrames = document.getElementById("processFrames");
         let result = document.getElementById("result");
+        let canvas = document.getElementById("canvas");
         let frames = [];
-        
+
         // Initialize webcam
         function startWebcam() {
             navigator.mediaDevices.getUserMedia({ video: true })
@@ -45,7 +49,6 @@
 
         // Capture frames from the video
         function captureFrame() {
-            let canvas = document.createElement("canvas");
             let context = canvas.getContext("2d");
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
@@ -55,29 +58,39 @@
 
         // Process frames with OpenCV.js for object detection and purity estimation
         function processCapturedFrames() {
-            // Example: Process the first frame
-            let frame = frames[0];
-            let src = cv.imread(frame);
-            let dst = new cv.Mat();
-            
-            // Convert to grayscale
-            cv.cvtColor(src, dst, cv.COLOR_RGBA2GRAY, 0);
+            let allContours = [];
+            frames.forEach(frame => {
+                let src = cv.imread(frame);
+                let dst = new cv.Mat();
+                
+                // Convert to grayscale
+                cv.cvtColor(src, dst, cv.COLOR_RGBA2GRAY, 0);
 
-            // Apply Canny edge detection
-            cv.Canny(dst, dst, 100, 200);
+                // Smooth the image to reduce noise (important for irregular surfaces)
+                cv.GaussianBlur(dst, dst, new cv.Size(5, 5), 0);
 
-            // Find contours
-            let contours = new cv.MatVector();
-            let hierarchy = new cv.Mat();
-            cv.findContours(dst, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
-            
-            // Draw contours
+                // Apply Canny edge detection
+                cv.Canny(dst, dst, 100, 200);
+
+                // Find contours
+                let contours = new cv.MatVector();
+                let hierarchy = new cv.Mat();
+                cv.findContours(dst, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+
+                // Store the contours for further processing
+                allContours.push(contours);
+            });
+
+            // Combine the contours from all frames to estimate 3D structure
+            let finalContours = combineContours(allContours);
+
+            // Draw the final contours on a canvas for visualization
             let contourImage = new cv.Mat();
-            cv.drawContours(contourImage, contours, -1, new cv.Scalar(255, 0, 0), 2);
+            cv.drawContours(contourImage, finalContours, -1, new cv.Scalar(255, 0, 0), 2);
             cv.imshow('resultCanvas', contourImage);
 
-            // Placeholder for volume and purity calculation
-            let volume = calculateVolumeFromContours(contours);
+            // Volume and purity calculation
+            let volume = calculateVolumeFromContours(finalContours);
             let weight = prompt("Enter the dry weight of the object in grams:");
             let density = 19.3;  // Density of pure gold (g/cm³)
             let purity = (weight / volume) / density * 1000;
@@ -85,15 +98,27 @@
             result.innerHTML = `Estimated Purity: ${purity.toFixed(2)}%`;
         }
 
-        // Calculate volume from contours (a placeholder function)
+        // Combine contours from multiple frames (basic fusion)
+        function combineContours(contourGroups) {
+            let combinedContours = new cv.MatVector();
+            contourGroups.forEach(contours => {
+                contours.forEach(contour => {
+                    combinedContours.push_back(contour);
+                });
+            });
+            return combinedContours;
+        }
+
+        // Calculate volume from contours (using contour area as a rough approximation)
         function calculateVolumeFromContours(contours) {
-            // Example: Calculate volume based on detected contours
-            let area = 0;
+            let totalArea = 0;
             for (let i = 0; i < contours.size(); i++) {
-                area += cv.contourArea(contours.get(i));
+                totalArea += cv.contourArea(contours.get(i));
             }
-            // Simple placeholder: Volume is proportional to the area detected
-            return area / 1000;  // Return volume in cm³ (just a placeholder formula)
+
+            // Simplified volume estimation based on area (assuming uniform thickness)
+            let thickness = 1;  // Assumed thickness of the object (can be adjusted or calculated)
+            return totalArea * thickness / 1000;  // Volume in cm³ (scaled by a factor for simplicity)
         }
 
         // Event listeners
@@ -103,8 +128,8 @@
             processFrames.disabled = false;
             setTimeout(function () {
                 captureFrame();
-                processCapturedFrames();
-            }, 2000);  // Example: capture one frame after 2 seconds
+                processFrames.disabled = false;
+            }, 2000);  // Example: capture first frame after 2 seconds
         });
 
         processFrames.addEventListener("click", function () {
