@@ -11,20 +11,30 @@
         button { padding: 10px 20px; font-size: 16px; margin-top: 10px; }
         canvas { display: none; }
         #result { margin-top: 20px; font-size: 18px; }
+        #instructions { font-size: 16px; color: #333; margin-top: 20px; }
+        #progress-bar { margin-top: 20px; }
+        #resultCanvas { margin-top: 20px; }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>Gold Purity Estimator</h1>
-        <p>Place the gold object with the coin beside it. Record each side of the object one by one.</p>
+        <p id="instructions">Place the gold object on a table with a coin next to it. Record each side of the object in a sequence.</p>
         
         <video id="video" width="600" height="400" autoplay></video>
         <br>
         <button id="startCapture">Start Capture</button>
         <br><br>
         <button id="processFrames" disabled>Process Frames</button>
-        <div id="result"></div>
+        <br><br>
+        <div id="progress-bar">
+            <progress id="captureProgress" value="0" max="100"></progress>
+        </div>
+        <br>
         <canvas id="canvas"></canvas>
+        <br>
+        <canvas id="resultCanvas"></canvas>
+        <div id="result"></div>
     </div>
 
     <script src="https://docs.opencv.org/4.x/opencv.js"></script>
@@ -33,7 +43,10 @@
         let startCapture = document.getElementById("startCapture");
         let processFrames = document.getElementById("processFrames");
         let result = document.getElementById("result");
+        let instructions = document.getElementById("instructions");
         let canvas = document.getElementById("canvas");
+        let resultCanvas = document.getElementById("resultCanvas");
+        let captureProgress = document.getElementById("captureProgress");
         let frames = [];
 
         // Initialize webcam
@@ -54,9 +67,10 @@
             canvas.height = video.videoHeight;
             context.drawImage(video, 0, 0, canvas.width, canvas.height);
             frames.push(canvas);
+            captureProgress.value = (frames.length / 6) * 100; // Assuming 6 sides to capture
         }
 
-        // Process frames with OpenCV.js for object detection and purity estimation
+        // Process frames with OpenCV.js for object detection and 3D modeling
         function processCapturedFrames() {
             let allContours = [];
             frames.forEach(frame => {
@@ -66,7 +80,7 @@
                 // Convert to grayscale
                 cv.cvtColor(src, dst, cv.COLOR_RGBA2GRAY, 0);
 
-                // Smooth the image to reduce noise (important for irregular surfaces)
+                // Smooth the image to reduce noise
                 cv.GaussianBlur(dst, dst, new cv.Size(5, 5), 0);
 
                 // Apply Canny edge detection
@@ -77,17 +91,30 @@
                 let hierarchy = new cv.Mat();
                 cv.findContours(dst, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
 
+                // Approximate contours to shapes (rectangles, ellipses, etc.)
+                let approxContours = [];
+                for (let i = 0; i < contours.size(); i++) {
+                    let contour = contours.get(i);
+                    let approx = new cv.Mat();
+                    cv.approxPolyDP(contour, approx, 3, true);
+                    approxContours.push(approx);
+                }
+
                 // Store the contours for further processing
-                allContours.push(contours);
+                allContours.push(approxContours);
             });
 
-            // Combine the contours from all frames to estimate 3D structure
+            // Combine contours from all frames to approximate 3D shape
             let finalContours = combineContours(allContours);
 
-            // Draw the final contours on a canvas for visualization
+            // Draw the contours for visualization
             let contourImage = new cv.Mat();
             cv.drawContours(contourImage, finalContours, -1, new cv.Scalar(255, 0, 0), 2);
             cv.imshow('resultCanvas', contourImage);
+
+            // 3D Modeling (simplified approximation)
+            let model3D = create3DModelFromContours(finalContours);
+            display3DModel(model3D);
 
             // Volume and purity calculation
             let volume = calculateVolumeFromContours(finalContours);
@@ -98,7 +125,7 @@
             result.innerHTML = `Estimated Purity: ${purity.toFixed(2)}%`;
         }
 
-        // Combine contours from multiple frames (basic fusion)
+        // Combine contours from multiple frames
         function combineContours(contourGroups) {
             let combinedContours = new cv.MatVector();
             contourGroups.forEach(contours => {
@@ -109,16 +136,30 @@
             return combinedContours;
         }
 
-        // Calculate volume from contours (using contour area as a rough approximation)
+        // Simple 3D model creation based on contours (for visualization)
+        function create3DModelFromContours(contours) {
+            // Placeholder for 3D modeling (advanced algorithms would be here)
+            return contours;
+        }
+
+        // Display a 3D model (simplified for demonstration)
+        function display3DModel(model3D) {
+            // Placeholder for actual 3D rendering code (could use Three.js or similar libraries)
+            resultCanvas.width = 600;
+            resultCanvas.height = 400;
+            let ctx = resultCanvas.getContext('2d');
+            ctx.clearRect(0, 0, resultCanvas.width, resultCanvas.height);
+            ctx.fillText("3D Model Placeholder", 10, 50);
+        }
+
+        // Calculate volume from contours (simplified)
         function calculateVolumeFromContours(contours) {
             let totalArea = 0;
             for (let i = 0; i < contours.size(); i++) {
                 totalArea += cv.contourArea(contours.get(i));
             }
-
-            // Simplified volume estimation based on area (assuming uniform thickness)
-            let thickness = 1;  // Assumed thickness of the object (can be adjusted or calculated)
-            return totalArea * thickness / 1000;  // Volume in cm³ (scaled by a factor for simplicity)
+            let thickness = 1; // Assumed thickness (could be further estimated)
+            return totalArea * thickness / 1000; // Volume in cm³
         }
 
         // Event listeners
@@ -129,7 +170,7 @@
             setTimeout(function () {
                 captureFrame();
                 processFrames.disabled = false;
-            }, 2000);  // Example: capture first frame after 2 seconds
+            }, 2000);
         });
 
         processFrames.addEventListener("click", function () {
