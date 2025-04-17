@@ -49,13 +49,37 @@
         let captureProgress = document.getElementById("captureProgress");
         let frames = [];
 
-        // Initialize webcam
+        // Function to select the back camera (rear camera)
         function startWebcam() {
-            navigator.mediaDevices.getUserMedia({ video: true })
-                .then(function (stream) {
+            navigator.mediaDevices.enumerateDevices()
+                .then(function(devices) {
+                    let videoDevices = devices.filter(function(device) {
+                        return device.kind === 'videoinput';
+                    });
+
+                    // Look for the back camera (facingMode: "environment")
+                    let backCamera = videoDevices.find(function(device) {
+                        return device.label.toLowerCase().includes('back') || device.facing === 'environment';
+                    });
+
+                    if (backCamera) {
+                        // Use the back camera
+                        return navigator.mediaDevices.getUserMedia({
+                            video: {
+                                deviceId: backCamera.deviceId
+                            }
+                        });
+                    } else {
+                        // If no back camera is found, fall back to front camera
+                        return navigator.mediaDevices.getUserMedia({
+                            video: true
+                        });
+                    }
+                })
+                .then(function(stream) {
                     video.srcObject = stream;
                 })
-                .catch(function (err) {
+                .catch(function(err) {
                     alert("Error accessing webcam: " + err);
                 });
         }
