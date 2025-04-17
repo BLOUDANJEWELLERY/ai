@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gold Purity Estimator</title>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        .container { text-align: center; }
+        video { max-width: 100%; margin-top: 20px; }
+        button { padding: 10px 20px; font-size: 16px; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Gold Purity Estimator</h1>
+        <p>Place the gold object with the coin beside it. Record each side of the object individually.</p>
+        
+        <video id="video" width="600" height="400" autoplay></video>
+        <br>
+        <button id="startCapture">Start Capture</button>
+        <br><br>
+        <button id="processFrames" disabled>Process Frames</button>
+        <div id="result"></div>
+    </div>
+
+    <script src="https://docs.opencv.org/4.x/opencv.js"></script>
+    <script>
+        let video = document.getElementById("video");
+        let startCapture = document.getElementById("startCapture");
+        let processFrames = document.getElementById("processFrames");
+        let result = document.getElementById("result");
+        let frames = [];
+        
+        // Initialize webcam
+        function startWebcam() {
+            navigator.mediaDevices.getUserMedia({ video: true })
+                .then(function (stream) {
+                    video.srcObject = stream;
+                })
+                .catch(function (err) {
+                    alert("Error accessing webcam: " + err);
+                });
+        }
+
+        // Capture frames from the video
+        function captureFrame() {
+            let canvas = document.createElement("canvas");
+            let context = canvas.getContext("2d");
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            frames.push(canvas);
+        }
+
+        // Process frames with OpenCV.js for object detection and purity estimation
+        function processCapturedFrames() {
+            // Example: Process the first frame
+            let frame = frames[0];
+            let src = cv.imread(frame);
+            let dst = new cv.Mat();
+            
+            // Convert to grayscale
+            cv.cvtColor(src, dst, cv.COLOR_RGBA2GRAY, 0);
+
+            // Apply Canny edge detection
+            cv.Canny(dst, dst, 100, 200);
+
+            // Find contours
+            let contours = new cv.MatVector();
+            let hierarchy = new cv.Mat();
+            cv.findContours(dst, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+            
+            // Draw contours
+            let contourImage = new cv.Mat();
+            cv.drawContours(contourImage, contours, -1, new cv.Scalar(255, 0, 0), 2);
+            cv.imshow('resultCanvas', contourImage);
+
+            // Placeholder for volume and purity calculation
+            let volume = calculateVolumeFromContours(contours);
+            let weight = prompt("Enter the dry weight of the object in grams:");
+            let density = 19.3;  // Density of pure gold (g/cm³)
+            let purity = (weight / volume) / density * 1000;
+
+            result.innerHTML = `Estimated Purity: ${purity.toFixed(2)}%`;
+        }
+
+        // Calculate volume from contours (a placeholder function)
+        function calculateVolumeFromContours(contours) {
+            // Example: Calculate volume based on detected contours
+            let area = 0;
+            for (let i = 0; i < contours.size(); i++) {
+                area += cv.contourArea(contours.get(i));
+            }
+            // Simple placeholder: Volume is proportional to the area detected
+            return area / 1000;  // Return volume in cm³ (just a placeholder formula)
+        }
+
+        // Event listeners
+        startCapture.addEventListener("click", function () {
+            startWebcam();
+            startCapture.disabled = true;
+            processFrames.disabled = false;
+            setTimeout(function () {
+                captureFrame();
+                processCapturedFrames();
+            }, 2000);  // Example: capture one frame after 2 seconds
+        });
+
+        processFrames.addEventListener("click", function () {
+            captureFrame();
+            processCapturedFrames();
+        });
+    </script>
+</body>
+</html>
