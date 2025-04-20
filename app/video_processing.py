@@ -1,19 +1,32 @@
 import cv2
 import numpy as np
 from app.mesh_processing import reconstruct_mesh, calculate_volume, scale_point_cloud
+import open3d as o3d
 
 def process_video(video_path):
     frames = extract_frames(video_path)
+    if not frames:
+        return {"error": "No frames extracted from the video. Please ensure the video is not corrupted or too short."}
+
     scale = estimate_scale(frames[0])  # Assume first frame contains visible coin
 
     if scale is None:
         return {"error": "Reference coin not detected. Please include it in the first frame."}
 
     point_cloud = generate_point_cloud(frames)
+    if point_cloud.size == 0:
+        return {"error": "Point cloud generation failed. Ensure the video has sufficient detail and motion."}
+
     scaled_pc = scale_point_cloud(point_cloud, scale)
 
     mesh = reconstruct_mesh(scaled_pc)
+    if mesh is None:
+        return {"error": "Mesh reconstruction failed."}
+
     volume = calculate_volume(mesh)
+
+    # Save mesh to static directory
+    o3d.io.write_triangle_mesh("static/mesh.ply", mesh)
 
     return {
         "volume": round(volume, 2),
@@ -43,7 +56,7 @@ def estimate_scale(frame):
 
     if circles is not None:
         coin_radius_px = circles[0][0][2]
-        coin_diameter_mm = 26
+        coin_diameter_mm = 26  # Standard coin diameter
         px_per_mm = (2 * coin_radius_px) / coin_diameter_mm
         return px_per_mm
 
@@ -58,6 +71,9 @@ def generate_point_cloud(frames):
         kp1, des1 = orb.detectAndCompute(cv2.cvtColor(frames[i], cv2.COLOR_BGR2GRAY), None)
         kp2, des2 = orb.detectAndCompute(cv2.cvtColor(frames[i + 1], cv2.COLOR_BGR2GRAY), None)
 
+        if des1 is None or des2 is None:
+            continue
+
         matches = bf.match(des1, des2)
         for m in matches:
             pt1 = kp1[m.queryIdx].pt
@@ -67,6 +83,3 @@ def generate_point_cloud(frames):
             point_cloud.append([x, y, z])
 
     return np.array(point_cloud)
-
-# Save mesh to static directory
-o3d.io.write_triangle_mesh("static/mesh.ply", mesh)

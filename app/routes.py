@@ -1,5 +1,6 @@
 from flask import Blueprint, request, render_template, jsonify
 import os
+from werkzeug.utils import secure_filename
 from app.video_processing import process_video
 
 bp = Blueprint('main', __name__)
@@ -19,7 +20,8 @@ def upload_video():
         return jsonify({"error": "Empty filename"})
 
     if file and allowed_file(file.filename):
-        filepath = os.path.join('static/uploads', file.filename)
+        filename = secure_filename(file.filename)
+        filepath = os.path.join('static/uploads', filename)
         file.save(filepath)
         abs_path = os.path.abspath(filepath)
 
@@ -29,7 +31,7 @@ def upload_video():
     return jsonify({"error": "Unsupported file format"})
 
 def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in {'mp4', 'mov', 'avi'}
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in {'mp4', 'mov', 'avi', 'webm'}
 
 @bp.route('/viewer')
 def viewer():
