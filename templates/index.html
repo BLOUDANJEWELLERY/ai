@@ -1,0 +1,85 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>3D Mesh Viewer</title>
+    <style>
+        #guide {
+            font-family: sans-serif;
+            color: gold;
+            background-color: rgba(0, 0, 0, 0.75);
+            padding: 10px;
+            border-radius: 8px;
+            display: inline-block;
+        }
+        </style>
+</head>        
+<div id="guide" style="font-size: 1.2em; margin-bottom: 10px;">
+    <p id="rotationInstruction">🟡 Rotate: Front</p>
+</div>
+<body>
+<video id="liveVideo" autoplay playsinline width="320" height="240"></video>
+<button id="startBtn">🎥 Start Recording</button>
+<button id="stopBtn" disabled>🛑 Stop & Upload</button>
+<div id="result"></div>
+<script>
+let mediaRecorder;
+let recordedChunks = [];
+
+const video = document.getElementById("liveVideo");
+const startBtn = document.getElementById("startBtn");
+const stopBtn = document.getElementById("stopBtn");
+
+navigator.mediaDevices.getUserMedia({ video: true })
+    .then(stream => {
+        video.srcObject = stream;
+        mediaRecorder = new MediaRecorder(stream);
+
+        mediaRecorder.ondataavailable = e => {
+            if (e.data.size > 0) recordedChunks.push(e.data);
+        };
+
+        mediaRecorder.onstop = async () => {
+            const blob = new Blob(recordedChunks, { type: "video/webm" });
+            recordedChunks = [];
+
+            const formData = new FormData();
+            formData.append("file", blob, "recorded_video.webm");
+
+            const res = await fetch("/upload", { method: "POST", body: formData });
+            const data = await res.json();
+            document.getElementById("result").innerHTML = `
+                <h3>Volume: ${data.volume ?? 'Error'}</h3>
+                <p>${data.mesh_info ?? data.error}</p>
+            `;
+        };
+    });
+
+startBtn.onclick = () => {
+    mediaRecorder.start();
+    startBtn.disabled = true;
+    stopBtn.disabled = false;
+};
+
+stopBtn.onclick = () => {
+    mediaRecorder.stop();
+    stopBtn.disabled = true;
+    startBtn.disabled = false;
+};
+
+const instructions = ["Front", "Back", "Left", "Right", "Top", "Bottom"];
+    let current = 0;
+
+    const instructionEl = document.getElementById("rotationInstruction");
+
+    const cyclePrompt = () => {
+        instructionEl.innerText = `🟡 Rotate: ${instructions[current]}`;
+        current = (current + 1) % instructions.length;
+    };
+
+    setInterval(cyclePrompt, 3000); // Every 3 seconds
+
+</script>
+</body>
+</html>
